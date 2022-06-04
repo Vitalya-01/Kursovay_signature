@@ -1,0 +1,161 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+import iisignature
+from statsmodels.tsa.arima_process import arma_generate_sample
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
+
+
+def leadlag(X):
+    '''
+    Returns lead-lag-transformed stream of X
+
+    Arguments:
+        X: list, whose elements are tuples of the form
+        (time, value).
+
+    Returns:
+        list of points on the plane, the lead-lag
+        transformed stream of X
+    '''
+
+    l=[]
+
+    for j in range(2*(len(X))-1):
+        i1=j//2
+        i2=j//2
+        if j%2!=0:
+            i1+=1
+        l.append((X[i1][1], X[i2][1]))
+
+    return l
+
+
+def timejoined(X):
+    '''
+    Returns time-joined transformation of the stream of
+    data X
+
+    Arguments:
+        X: list, whose elements are tuples of the form
+        (time, value).
+
+    Returns:
+        list of points on the plane, the time-joined
+        transformed stream of X
+    '''
+    X.append(X[-1])
+    l = []
+
+    for j in range(2*(len(X))+1+2):
+            if j == 0:
+                    l.append((X[j][0], 0))
+                    continue
+            for i in range(len(X)-1):
+                    if j == 2*i+1:
+                            l.append((X[i][0], X[i][1]))
+                            break
+                    if j == 2*i+2:
+                            l.append((X[i+1][0], X[i][1]))
+                            break
+    return l
+
+
+arparams1 = np.array([1, -0.4])
+maparams1 = np.array([1, 0.5])
+arparams2 = np.array([1, -0.8])
+maparams2 = np.array([1, 0.7])
+
+# Example of one time-series of class "0" and class "1"
+y1 = arma_generate_sample(arparams1, maparams1, nsample=100, scale=0.5)
+y2 = arma_generate_sample(arparams2, maparams2, nsample=100, scale=0.5)
+
+fig = plt.figure()
+plt.xlabel("t", fontsize=16)
+plt.ylabel("Yi", fontsize=16)
+plt.plot(y1,label = "0")
+plt.plot(y2,label = "1")
+plt.legend(prop={"size":16})
+plt.show()
+plt.savefig('saved_figure.png')
+
+ind = [i+1 for i in range(100)]
+class1 = []
+class2 = []
+
+# Creating 500 time-series of each-class
+for j in range(500):
+    y1 = arma_generate_sample(arparams1, maparams1, nsample=100, scale=0.5)
+    y2 = arma_generate_sample(arparams2, maparams2, nsample=100, scale=0.5)
+    class1.append(leadlag(list(zip(ind, np.cumsum(y1)))))
+    class2.append(leadlag(list(zip(ind, np.cumsum(y2)))))
+
+S_Y0 = [iisignature.sig(class1[i], 2, 1) for i in range(len(class1))]
+S_Y1 = [iisignature.sig(class2[i], 2, 1) for i in range(len(class2))]
+
+
+# Receiving elements of S12 and S21 of each class
+S_Y0_1_2 = [S_Y0[i][1][1] for i in range(len(S_Y0))]
+S_Y0_2_1 = [S_Y0[i][1][2] for i in range(len(S_Y0))]
+
+S_Y1_1_2 = [S_Y1[i][1][1] for i in range(len(S_Y1))]
+S_Y1_2_1 = [S_Y1[i][1][2] for i in range(len(S_Y1))]
+
+for i in range(len(S_Y0_1_2)):
+    S_Y0_1_2[i] = (S_Y0_1_2[i] - np.average(S_Y0_1_2))/ np.std(S_Y0_1_2)
+    S_Y0_2_1[i] = (S_Y0_2_1[i] - np.average(S_Y0_2_1)) / np.std(S_Y0_2_1)
+
+for i in range(len(S_Y1_1_2)):
+    S_Y1_1_2[i] = (S_Y1_1_2[i] - np.average(S_Y1_1_2))/ np.std(S_Y1_1_2)
+    S_Y1_2_1[i] = (S_Y1_2_1[i] - np.average(S_Y1_2_1)) / np.std(S_Y1_2_1)
+
+# Print S12 and S21
+plt.scatter(S_Y0_1_2, S_Y0_2_1, label='0')
+plt.scatter(S_Y1_1_2, S_Y1_2_1, label='1')
+plt.xlabel("S12", fontsize=16)
+plt.ylabel("S21", fontsize=16)
+plt.legend(prop={"size":16})
+plt.show()
+
+## Доделать лассо
+# Receiving elements of S12 and S21 of each class
+S_Y0_1 = [S_Y0[i][0][0] for i in range(len(S_Y0))]
+S_Y0_2 = [S_Y0[i][0][1] for i in range(len(S_Y0))]
+
+S_Y1_1 = [S_Y1[i][0][0] for i in range(len(S_Y1))]
+S_Y1_2 = [S_Y1[i][0][1] for i in range(len(S_Y1))]
+
+for i in range(len(S_Y0_1_2)):
+    S_Y0_1[i] = (S_Y0_1[i] - np.average(S_Y0_1))/ np.std(S_Y0_1)
+    S_Y0_2[i] = (S_Y0_2[i] - np.average(S_Y0_2)) / np.std(S_Y0_2)
+
+for i in range(len(S_Y1_1_2)):
+    S_Y1_1[i] = (S_Y1_1[i] - np.average(S_Y1_1))/ np.std(S_Y1_1)
+    S_Y1_2[i] = (S_Y1_2[i] - np.average(S_Y1_2)) / np.std(S_Y1_2)
+
+X = [[S_Y0_1[i],S_Y0_2[i],S_Y0_1_2[i],S_Y0_2_1[i]] for i in range(len(S_Y0_1))]
+for i in range(len(S_Y1_1)):
+    X.append([S_Y1_1[i],S_Y1_2[i],S_Y1_1_2[i],S_Y1_2_1[i]])
+
+y = [0 for i in range(500)]
+for i in range(500):
+    y.append(1)
+
+X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.3, random_state=42)
+clf = LogisticRegression()
+clf.fit(X_train,y_train)
+
+pred_train = clf.predict(X_train)
+pred_test = clf.predict(X_test)
+
+print("Тренировочный набор:")
+print(confusion_matrix(y_train,pred_train))
+print("Точность:",accuracy_score(y_train, pred_train))
+print()
+print("Тестовый набор:")
+print(confusion_matrix(y_test,pred_test))
+print("Точность:",accuracy_score(y_test, pred_test))
